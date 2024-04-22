@@ -1,6 +1,6 @@
 # Prácticas de Administración de Sistemas
 
-Este repositorio contieneel código, configuraciones y documentación relacionada con los siguientes proyectos y tareas:
+Este repositorio contiene el código, configuraciones y documentación relacionada con los siguientes proyectos y tareas:
 
 - **VMs con OpenBSD y libvirt**: Configuración de  máquinas virtuales en un entorno de red, con una configurada como router en IPv6, y despliegue de un servicio inicial de sincronización de tiempo (NTP).
 
