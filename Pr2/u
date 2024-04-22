@@ -1,0 +1,87 @@
+#!/usr/bin/ruby -w
+require 'net/ping'
+require 'net/ssh'
+require 'timeout'
+
+class UTool
+    TIMEOUT = 2
+  def initialize
+    @hosts_file = File.expand_path('~/.u/hosts')
+  end
+
+  def read_hosts
+    File.readlines(@hosts_file).map(&:chomp)
+  end
+
+  def ping
+    hosts = read_hosts
+    results = {}
+
+    hosts.each do |host|
+      results[host] = ping_host(host)
+    end
+   display_results(results)
+  end
+
+  def execute_command(command)
+    hosts = read_hosts
+    results = {}
+
+    hosts.each do |host|
+      results[host] = execute_remote_command(host, command)
+    end
+
+    display_results(results)
+  end
+
+  private
+
+  def ping_host(host)
+    begin
+      if Net::Ping::TCP.new(host,22,0.4).ping?
+          return "FUNCIONA"
+      else
+          return "falla"
+      end
+    end
+  end
+
+  def execute_remote_command(host, command)
+      begin
+        Timeout.timeout(0.4) do
+          Net::SSH.start(host, "a842748", keys: ["~/.ssh/id_rsa"]) do |ssh|
+          #   ssh.exec!(command)
+          end
+        end
+        'exito'
+      rescue Timeout::Error
+        'timeout'
+      rescue StandardError => e
+        "error: #{e.message}"
+      end
+    end
+
+
+    def display_results(results)
+      results.each do |host, status|
+        puts "#{host}: #{status}"
+      end
+    end
+  end
+
+  if $PROGRAM_NAME == __FILE__
+    case ARGV[0]
+    when 'p'
+      UTool.new.ping
+    when 's'
+      command = ARGV[1]
+      unless command.nil?
+        UTool.new.execute_command(command)
+      else
+        puts 'Falta el comando a ejecutar.'
+      end
+    else
+      puts 'Uso: ruby u.rb <subcomando> <opciones comandos>'
+      puts 'Subcomandos disponibles: p, s'
+    end
+  end
