@@ -1,15 +1,13 @@
-# Prácticas de Administración de Sistemas
+# System Administration Practices
 
-Este repositorio contiene el código, configuraciones y documentación relacionada con los siguientes proyectos y tareas:
+This repository contains the code, configurations, and documentation related to the following projects and tasks:
 
-- **VMs con OpenBSD y libvirt**: Configuración de  máquinas virtuales en un entorno de red, con una configurada como router en IPv6, y despliegue de un servicio inicial de sincronización de tiempo (NTP).
+- **VMs with OpenBSD and libvirt**: Configuration of virtual machines in a network environment, with one acting as an IPv6 router, and deployment of an initial time synchronization service (NTP).
 
-- **Servicios distribuidos**: Implementación de servicios DNS y NFS, así como uso básico de ZFS y Ruby para administración.
+- **Distributed Services**: Implementation of DNS and NFS services, as well as basic use of ZFS and Ruby for administration.
 
-- **FreeBSD y ZFS**: Uso de FreeBSD y ZFS, con despliegue de un servicio distribuido NFS sobre estos.
+- **FreeBSD and ZFS**: Use of FreeBSD and ZFS, with the deployment of a distributed NFS service on these platforms.
 
-- **Dominio FreeIPA y NFS en Fedora**: Configuración de un dominio FreeIPA y despliegue de NFS sobre Fedora.
+- **FreeIPA Domain and NFS on Fedora**: Configuration of a FreeIPA domain and deployment of NFS on Fedora.
 
-- **Cluster Kubernetes**: Implementación de un clúster Kubernetes, incluyendo despliegue de una aplicación web básica y un repositorio privado de contenedores utilizando un almacenamiento distribuido de alta disponibilidad.
-
-
+- **Kubernetes Cluster**: Implementation of a Kubernetes cluster, including the deployment of a basic web application and a private container registry using highly available distributed storage.
