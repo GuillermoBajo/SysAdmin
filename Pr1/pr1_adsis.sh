@@ -1,80 +1,79 @@
 #!/bin/bash
 
-# Este script permite definir, poner en marcha o detener una VM en un servidor remoto.
-# Tiene dos modos de uso:
-# 1. Interactivo: Si no se proporciona ningún parámetro al ejecutar el script, se mostrarán
-#    opciones al usuario para interactuar con el script.
-# 2. Desde un archivo de configuración: Si se proporciona un archivo de configuración como 
-#    parámetro al ejecutar el script, leerá las instrucciones del archivo y ejecutará las acciones correspondientes.
+# This script allows you to define, start, or stop a VM on a remote server.
+# It has two modes of operation:
+# 1. Interactive: If no parameters are provided when running the script, 
+#    options will be displayed for the user to interact with the script.
+# 2. From a configuration file: If a configuration file is provided as a 
+#    parameter, the script will read instructions from the file and execute 
+#    the corresponding actions.
 
-
-# Verificar el número de parámetros proporcionados
+# Verify the number of parameters provided
 if [ $# -eq 0 ]; then
-    # Mostrar opciones al usuario
-    echo "Este script le permitirá definir, poner en marcha o detener una VM hasta que escoja la opción de salir."
+    # Display options to the user
+    echo "This script will allow you to define, start, or stop a VM until you choose the exit option."
     while true; do
-        echo "Opciones:"
-        echo "1. Definir una VM"
-        echo "2. Poner en marcha una VM"
-        echo "3. Detener una VM"
-        echo "4. Salir"
+        echo "Options:"
+        echo "1. Define a VM"
+        echo "2. Start a VM"
+        echo "3. Stop a VM"
+        echo "4. Exit"
 
-        # Leer la opción del usuario
-        read opcion
+        # Read the user's choice
+        read option
 
-        # Comprobar la opción seleccionada y ejecutar la acción correspondiente
-        case $opcion in
+        # Check the selected option and execute the corresponding action
+        case $option in
             1)
-                echo "Introduzca el nombre de la VM que desea definir:"
-                read nombre
-                ssh -n a842748@155.210.154.204 "cd /../../misc/alumnos/as2/as22023/a842748 && virsh -c qemu:///system define $nombre.xml"
+                echo "Enter the name of the VM you want to define:"
+                read name
+                ssh -n a842748@155.210.154.204 "cd /../../misc/alumnos/as2/as22023/a842748 && virsh -c qemu:///system define $name.xml"
                 ;;
             2)
-                echo "Introduzca el nombre de la VM que desea poner en marcha:"
-                read nombre
-                ssh a842748@155.210.154.204 "virsh -c qemu:///system start $nombre"
+                echo "Enter the name of the VM you want to start:"
+                read name
+                ssh a842748@155.210.154.204 "virsh -c qemu:///system start $name"
                 ;;
             3)
-                echo "Introduzca el nombre de la VM que desea detener:"
-                read nombre
-                ssh a842748@155.210.154.204 "virsh -c qemu:///system shutdown $nombre"
+                echo "Enter the name of the VM you want to stop:"
+                read name
+                ssh a842748@155.210.154.204 "virsh -c qemu:///system shutdown $name"
                 ;;
             4)
-                echo "Ha seleccionado salir, ¡adiós!"
+                echo "You have selected to exit, goodbye!"
                 exit 0
                 ;;
             *)
-                echo "Error: Opción no válida. Por favor, seleccione una opción del 1 al 4."
+                echo "Error: Invalid option. Please select an option between 1 and 4."
                 exit 1
                 ;;
         esac
     done
 
 elif [ $# -eq 1 ]; then
-    archivo=$1
-    if [ ! -f $archivo ]; then
-        echo "El archivo $archivo no existe."
+    file=$1
+    if [ ! -f $file ]; then
+        echo "The file $file does not exist."
         exit 1
     fi
     
-    while IFS=' ' read -r codigo nombre_vm; do
-        case $codigo in
+    while IFS=' ' read -r code vm_name; do
+        case $code in
             1)
-                ssh -n a842748@155.210.154.204 "cd ~/misc/alumnos/as2/as22023/a842748 && virsh -c qemu:///system define $nombre_vm"
+                ssh -n a842748@155.210.154.204 "cd ~/misc/alumnos/as2/as22023/a842748 && virsh -c qemu:///system define $vm_name"
                 ;;
             2)
-                ssh -n a842748@155.210.154.204 "virsh -c qemu:///system start $nombre_vm"
+                ssh -n a842748@155.210.154.204 "virsh -c qemu:///system start $vm_name"
                 ;;
             3)
-                ssh -n a842748@155.210.154.204 "virsh -c qemu:///system shutdown $nombre_vm"
+                ssh -n a842748@155.210.154.204 "virsh -c qemu:///system shutdown $vm_name"
                 ;;
             *)
-                echo "Error: Número de acción no válido en el archivo."
+                echo "Error: Invalid action number in the file."
                 exit 1
                 ;;
         esac
-    done < $archivo
+    done < $file
 else
-    echo "Numero de parametros incorrecto. Usage: ./pr1_adsis.sh [fichero_config]"
+    echo "Incorrect number of parameters. Usage: ./pr1_adsis.sh [config_file]"
 fi
-

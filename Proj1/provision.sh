@@ -1,60 +1,60 @@
 #!/bin/bash -x
 ###############################################################################################################
-## Este script se utiliza para aprovisionar y configurar un nodo en un clúster de Kubernetes utilizando K3s. ##
+## This script is used to provision and configure a node in a Kubernetes cluster using K3s.                  ##
 ###############################################################################################################
 
-# Definición de variables
+# Variable definitions
 HOSTNAME=$1
 NODEIP=$2
 MASTERIP=$3
 NODETYPE=$4
 
-# Cnfiguración de la zona horaria
+# Timezone configuration
 timedatectl set-timezone Europe/Madrid
 
 cd /vagrant
-# Cambiar el nombre del host
+# Change the hostname
 echo $1 > /etc/hostname
 hostname $1
 
-# Actualización del archivo /etc/hosts para incluir las direcciones IP y nombres de host de todos los nodos
+# Update the /etc/hosts file to include the IP addresses and hostnames of all nodes
 { echo 192.168.1.201 w1; echo 192.168.1.202 w2
   echo 192.168.1.203 w3; cat /etc/hosts
 } > /etc/hosts.new
 mv /etc/hosts{.new,}
 
-# Copiar el binario de K3s al directorio /usr/local/bin/
+# Copy the K3s binary to the /usr/local/bin/ directory
 cp k3s /usr/local/bin/
 
-# Instalación de K3s dependiendo del tipo de nodo
+# K3s installation depending on the type of node
 
-# Si el nodo es un nodo maestro, se instala K3s en modo servidor
+# If the node is a master node, install K3s in server mode
 if [ $NODETYPE = "master" ]; then 
   INSTALL_K3S_SKIP_DOWNLOAD=true \
   ./install.sh server \
-   # Token de acceso para unirse al clúster
+   # Access token to join the cluster
   --token "wCdC16AlP8qpqqI53DM6ujtrfZ7qsEM7PHLxD+Sw+RNK2d1oDJQQOsBkIwy5OZ/5" \
-  # Interfaz de red para Flannel
+  # Network interface for Flannel
   --flannel-iface enp0s8 \
-  # Dirección IP a la que se enlazará el servidor de K3s
+  # IP address the K3s server will bind to
   --bind-address $NODEIP \
-   # Dirección IP y nombre del nodo
+   # Node IP address and name
   --node-ip $NODEIP --node-name $HOSTNAME \
-   # Deshabilitar Traefik y ServiceLB
+   # Disable Traefik and ServiceLB
   --disable traefik \
   --disable servicelb \
   --node-taint k3s-controlplane=true:NoExecute 
   
-  # Copiar el archivo de configuración de K3s para acceso remoto
+  # Copy the K3s configuration file for remote access
   cp /etc/rancher/k3s/k3s.yaml /vagrant
   
 else
-  # Si el nodo es un nodo de trabajo, se instala K3s en modo agente
+  # If the node is a worker node, install K3s in agent mode
   INSTALL_K3S_SKIP_DOWNLOAD=true \
-  # URL del servidor maestro
+  # URL of the master server
   ./install.sh agent --server https://${MASTERIP}:6443 \
-  # Token de acceso para unirse al clúster
+  # Access token to join the cluster
   --token "wCdC16AlP8qpqqI53DM6ujtrfZ7qsEM7PHLxD+Sw+RNK2d1oDJQQOsBkIwy5OZ/5" \
-  # Dirección IP, nombre del nodo y configuración de Flannel
+  # Node IP address, name, and Flannel configuration
   --node-ip $NODEIP --node-name $HOSTNAME --flannel-iface enp0s8
 fi

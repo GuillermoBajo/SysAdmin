@@ -3,246 +3,237 @@ require 'net/ping/tcp'
 require 'net/ssh'
 require 'net/scp'
 
-# Funcion que ejecuta la accion correspondiente al subcomando
-def accion(subcomando, grupo_o_maquina, subcomando_ssh, lista_fichs)
-    # Leer el archivo de hosts y almacenar las direcciones en un hash
-    hosts, es_maquina = leer_hosts(grupo_o_maquina)
-    if subcomando == "p"
-        if grupo_o_maquina.nil? # Si no se especifica un grupo o máquina, hacer ping a todas las máquinas
-            ping_todas(hosts, nil)
-        elsif !es_maquina # Si se especifica un grupo, hacer ping a todas las máquinas del grupo
-            ping_todas(hosts, grupo_o_maquina)
-        else # Si se especifica una máquina, hacer ping a la máquina
-            ping_maquina(grupo_o_maquina)
-        end
-
-    elsif subcomando == "s"
-        if grupo_o_maquina.nil? # Si no se especifica un grupo o máquina, ejecutar el comando en todas las máquinas
-            ssh_todas(hosts, nil, subcomando_ssh)
-        elsif !es_maquina # Si se especifica un grupo, ejecutar el comando en todas las máquinas del grupo
-            ssh_todas(hosts, grupo_o_maquina, subcomando_ssh)
-        else # Si se especifica una máquina, ejecutar el comando en la máquina
-            ssh_maquina(grupo_o_maquina, subcomando_ssh)
-        end
-
-    elsif subcomando == "c"
-        if grupo_o_maquina.nil? # Si no se especifica un grupo o máquina, aplicar el manifiesto en todas las máquinas
-            aplicar_manifiesto_en_todas(hosts, nil, lista_fichs)
-        elsif !es_maquina # Si se especifica un grupo, aplicar el manifiesto en todas las máquinas del grupo
-            aplicar_manifiesto_en_todas(hosts, grupo_o_maquina, lista_fichs)
-        else # Si se especifica una máquina, aplicar el manifiesto en la máquina
-            aplicar_manifiesto_en_maquina(grupo_o_maquina, lista_fichs)
-        end
+# Function that executes the action corresponding to the subcommand
+def perform_action(subcommand, group_or_machine, ssh_subcommand, file_list)
+  # Read the hosts file and store the addresses in a hash
+  hosts, is_machine = read_hosts(group_or_machine)
+  if subcommand == "p"
+    if group_or_machine.nil? # If no group or machine is specified, ping all machines
+      ping_all(hosts, nil)
+    elsif !is_machine # If a group is specified, ping all machines in the group
+      ping_all(hosts, group_or_machine)
+    else # If a specific machine is specified, ping that machine
+      ping_machine(group_or_machine)
     end
+
+  elsif subcommand == "s"
+    if group_or_machine.nil? # If no group or machine is specified, execute the command on all machines
+      ssh_all(hosts, nil, ssh_subcommand)
+    elsif !is_machine # If a group is specified, execute the command on all machines in the group
+      ssh_all(hosts, group_or_machine, ssh_subcommand)
+    else # If a specific machine is specified, execute the command on that machine
+      ssh_machine(group_or_machine, ssh_subcommand)
+    end
+
+  elsif subcommand == "c"
+    if group_or_machine.nil? # If no group or machine is specified, apply the manifest on all machines
+      apply_manifest_on_all(hosts, nil, file_list)
+    elsif !is_machine # If a group is specified, apply the manifest on all machines in the group
+      apply_manifest_on_all(hosts, group_or_machine, file_list)
+    else # If a specific machine is specified, apply the manifest on that machine
+      apply_manifest_on_machine(group_or_machine, file_list)
+    end
+  end
 end
 
-# Funcion que aplica un manifiesto en una máquina 
-def aplicar_manifiesto_en_maquina(host, lista_fichs)
+# Function that applies a manifest on a specific machine
+def apply_manifest_on_machine(host, file_list)
+  begin
+    Net::SSH.start(host, 'a842748') do |ssh| # Connect to the host via SSH (ssh represents the connection)
+      file_list.each do |file| # Iterate over the list of files
+        Net::SCP.upload!(host, 'a842748', "/home/a842748/.u/manifests/#{file}", "/tmp/#{file}") # Upload the file to the host
+        output = ssh.exec!("sudo puppet apply /tmp/#{file}") # Apply the manifest on the host and store the output
+        puts "#{host}: #{output}" # Display the output
+        ssh.exec!("rm /tmp/#{file}") # Remove the temporary file created on the host
+      end
+    end
+  rescue => e # If an error occurs, capture and display it
+    puts "Error: #{e.message}"
+  end
+end
+
+# Function that applies a manifest on all machines in a group or all from the hosts file
+def apply_manifest_on_all(hosts, specific_group, file_list)
+  if !specific_group.nil? && !hosts.key?(specific_group) # If a group is specified and it doesn't exist, return an error
+    puts "Group #{specific_group} does not exist."
+    return
+  end
+
+  # Apply the manifest to all machines if no group is specified, otherwise only to the group
+  machines = specific_group.nil? ? hosts.values.flatten : hosts[specific_group]
+  applied_addresses = []
+  machines.each do |address|
     begin
-        Net::SSH.start(host, 'a842748') do |ssh| # Conectar al host mediante ssh (ssh representa la conexion con el host)
-            lista_fichs.each do |fichero| # Iterar sobre la lista de ficheros
-                Net::SCP.upload!(host, 'a842748', "/home/a842748/.u/manifiestos/#{fichero}", "/tmp/#{fichero}") # Subir el fichero al host
-                output = ssh.exec!("sudo puppet apply /tmp/#{fichero}") # Aplicar el manifiesto en el host y guardar la salida en la variable output
-                puts "#{host}: #{output}" # Mostrar la salida en pantalla
-                ssh.exec!("rm /tmp/#{fichero}") # Eliminar el fichero temporal credo del host
-            end
+      unless applied_addresses.include?(address) # If the manifest hasn't been applied to this machine yet, apply it
+        Net::SSH.start(address, 'a842748') do |ssh|
+          file_list.each do |file|
+            Net::SCP.upload!(address, 'a842748', "/home/a842748/.u/manifests/#{file}", "/tmp/#{file}") # Upload the file
+            output = ssh.exec!("sudo puppet apply /tmp/#{file}") # Apply the manifest and capture the output
+            puts "#{address}: #{output}"
+            ssh.exec!("rm /tmp/#{file}")
+            applied_addresses << address # Add the address to the list of applied machines
+          end
         end
-    rescue => e # Si se produce un error, capturarlo y mostrarlo en pantalla
-        puts "Error: #{e.message}"
+      end
+    rescue => e
+      puts "Error: #{e.message}"
     end
+  end
 end
 
-# Funcion que aplica un manifiesto en todas las máquinas del grupo o en todas las del archivo hosts
-def aplicar_manifiesto_en_todas(hosts, grupo_especifico, lista_fichs)
-    if !grupo_especifico.nil? && !hosts.key?(grupo_especifico) # Si se especifica un grupo y no existe en el fichero de hosts devuelve error
-        puts "El grupo #{grupo_especifico} no existe."
-        return
-    end
+# Function to execute an SSH command on all machines in a group or all from the hosts file
+def ssh_all(hosts, specific_group, ssh_subcommand)
+  if !specific_group.nil? && !hosts.key?(specific_group) # If a group is specified and it doesn't exist, return an error
+    puts "Group #{specific_group} does not exist."
+    return
+  end
 
-    # Si no se especifica un grupo, aplicar el manifiesto en todas las máquinas, sino solo en las del grupo
-    maquinas = grupo_especifico.nil? ? hosts.values.flatten : hosts[grupo_especifico]
-    direcciones_aplicadas = []
-    maquinas.each do |direccion|
-        begin 
-            unless direcciones_aplicadas.include?(direccion) # Si no se le ha aplicado el manifiesto a esa maquina, hacerlo
-                Net::SSH.start(direccion, 'a842748') do |ssh|
-                    lista_fichs.each do |fichero| 
-	                Net::SCP.upload!(host, 'a842748', "/home/a842748/.u/manifiestos/#{fichero}", "/tmp/#{fichero}") # Subir el fichero al host
-                	output = ssh.exec!("sudo puppet apply /tmp/#{fichero}") # Aplicar el manifiesto en el host y guardar la salida en la variable output
-                        puts "#{direccion}: #{output}"
-                        ssh.exec!("rm /tmp/#{fichero}")
-                        direcciones_aplicadas << direccion # Agregar la direccion a la lista de direcciones a las que ya se les aplico el manifiesto
-                    end
-                end
-            end
-        rescue => e
-            puts "Error: #{e.message}"
+  # Execute the command on all machines if no group is specified, otherwise only on the group
+  machines = specific_group.nil? ? hosts.values.flatten : hosts[specific_group]
+  ssh_done = [] # List to track machines that have already been accessed via SSH
+  machines.each do |address|
+    begin
+      unless ssh_done.include?(address) # If SSH hasn't been executed on this machine yet, execute it
+        Net::SSH.start(address, 'a842748') do |ssh|
+          output = ssh.exec!(ssh_subcommand) # Execute the command and capture the output
+          puts "Success:\n#{output}"
+          ssh_done << address # Add the address to the list of SSH-executed machines
         end
+      end
+    rescue StandardError => error # If an error occurs, capture and display it
+      puts "Error on #{address}: #{error.message}"
     end
+  end
 end
 
-
-# Funcion que ejecuta el comando ssh en todas las maquinas del grupo o en todas las del archivo hosts
-def ssh_todas(hosts, grupo_especifico, subcomando_ssh)
-    if !grupo_especifico.nil? && !hosts.key?(grupo_especifico) # Si se especifica un grupo y no existe en el fichero de hosts devuelve error
-        puts "El grupo #{grupo_especifico} no existe."
-        return
+# Function to execute an SSH command on a specific machine
+def ssh_machine(host, ssh_subcommand)
+  begin
+    Net::SSH.start(host, 'a842748') do |ssh| # Connect to the host via SSH
+      output = ssh.exec!(ssh_subcommand) # Execute the command and capture the output
+      puts "Success:\n#{output}"
     end
-
-    # Si no se especifica un grupo, ejecutar el comando en todas las máquinas, sino solo en las del grupo
-    maquinas = grupo_especifico.nil? ? hosts.values.flatten : hosts[grupo_especifico] 
-    direcciones_sshadas = [] # Lista para almacenar las direcciones a las que ya se les ha hecho ssh
-    maquinas.each do |direccion|
-        begin  #Es recomendable ponerlo en bloques de codigo donde pueden ocurrir excepciones
-            unless direcciones_sshadas.include?(direccion) # Si no se le ha hecho ya ssh a esa maquina, hacerlo
-                Net::SSH.start(direccion, 'a842748') do |ssh|
-                    salida = ssh.exec!(subcomando_ssh) # Ejecutar el comando en el host y guardar la salida en la variable salida   
-                    puts  "exito;\n#{salida}"
-                    direcciones_sshadas << direccion # Agregar la direccion a la lista de direcciones a las que ya se les hizo ssh
-                end
-            end
-        rescue StandardError => error # Si se produce un error, capturarlo y mostrarlo en pantalla
-            puts "Error en #{direccion}: #{error.message}"
-        end
-    end
+  rescue StandardError => error # If an error occurs, capture and display it
+    puts "Error: #{error.message}"
+  end
 end
 
+# Function to ping all machines in a group or all from the hosts file
+def ping_all(hosts, specific_group)
+  if !specific_group.nil? && !hosts.key?(specific_group) # If a group is specified and it doesn't exist, return an error
+    puts "Group #{specific_group} does not exist."
+    return
+  end
 
-# Funcion que ejecuta el comando ssh en la maquina especificada
-def ssh_maquina(host, subcomando_ssh)
-    begin  
-        Net::SSH.start(host, 'a842748') do |ssh| # Conectar al host mediante ssh (ssh representa la conexion con el host)
-            salida = ssh.exec!(subcomando_ssh) # Ejecutar el comando en el host y guardar la salida en la variable salida
-            puts "exito;\n#{salida}"
-        end
-    rescue StandardError => error # Si se produce un error, capturarlo y mostrarlo en pantalla
-        puts "error: #{error.message}"
+  # Ping all machines if no group is specified, otherwise only the group
+  machines = specific_group.nil? ? hosts.values.flatten : hosts[specific_group]
+  pinged_addresses = [] # List to track machines that have already been pinged
+  machines.each do |address|
+    unless pinged_addresses.include?(address) # If this address hasn't been pinged yet, ping it
+      t = Net::Ping::TCP.new(address, 22, 0.02) # Ping the host via TCP on port 22 with a 0.02-second timeout
+      puts "#{address}: #{t.ping? ? 'SUCCESS' : 'FAIL'}"
+      pinged_addresses << address # Add the address to the list of pinged machines
     end
+  end
 end
 
-
-# Funcion que hace ping a todas las maquinas del grupo o a todas las del archivo hosts
-def ping_todas(hosts, grupo_especifico)
-    if !grupo_especifico.nil? && !hosts.key?(grupo_especifico) # Si se especifica un grupo y no existe en el fichero de hosts devuelve error
-        puts "El grupo #{grupo_especifico} no existe."
-        return
-    end
-    
-    # Si no se especifica un grupo, hacer ping a todas las máquinas, sino solo a las del grupo
-    maquinas = grupo_especifico.nil? ? hosts.values.flatten : hosts[grupo_especifico]
-    direcciones_pingueadas = [] # Lista para almacenar las direcciones a las que ya se les ha hecho ping
- 
-    maquinas.each do |direccion|
-        unless direcciones_pingueadas.include?(direccion) # Si no se le ha hecho ya ping a esa direccion, hacerlo
-            t = Net::Ping::TCP.new(direccion, 22, 0.02) # Hacer ping al host mediante TCP en el puerto 22 con un timeout de 0.02 segundos
-            puts "#{direccion}: #{t.ping? ? 'FUNCIONA' : 'falla'}" 
-            direcciones_pingueadas << direccion # Agregar la direccion a la lista de direcciones a las que ya se les hizo ping
-        end
-    end
+# Function to ping a specific machine
+def ping_machine(host)
+  t = Net::Ping::TCP.new(host, 22, 0.02) # Ping the host via TCP on port 22 with a 0.02-second timeout
+  if t.ping? # If the ping is successful
+    puts "#{host}: SUCCESS"
+  else # If the ping fails
+    puts "#{host}: FAIL"
+  end
 end
 
-
-def ping_maquina(host)
-    t = Net::Ping::TCP.new(host, 22, 0.02) # Hacer ping al host mediante TCP en el puerto 22 con un timeout de 0.02 segundos
-    if t.ping? # Si el ping es exitoso
-        puts "#{host}: FUNCIONA"
-    else # Si el ping falla
-        puts "#{host}: falla"
+# Function to read the hosts file and return a hash of groups and their addresses
+def read_hosts(group_or_machine)
+  hosts = {}
+  current_group = nil # Variable to store the current group while reading the file
+  is_machine = false # Variable to determine if the parameter group_or_machine is a machine or a group
+  hosts_file = File.expand_path('~/.u/hosts')
+  File.open(hosts_file, 'r').each_line do |line| # Open the file in read mode
+    line = line.strip # Remove leading and trailing whitespace
+    if line.start_with?('-') # If the line starts with '-', it's a new group
+      current_group = line[1..-1] # Store the group name without the dash
+      hosts[current_group] = [] # Initialize an empty list for the group's addresses
+    elsif line.start_with?('+') # If the line starts with '+', include a previous group
+      previous_group = line[1..-1] # Store the previous group's name
+      if hosts.key?(previous_group) # Check if the previous group exists in the hosts hash
+        hosts[current_group].concat(hosts[previous_group]) # Append the previous group's addresses to the current group
+      end
+    elsif !line.empty? # Otherwise, if the line is not empty, it's an IP address or DNS name
+      if current_group # Check if a current group is defined
+        hosts[current_group] << line # Add the address to the current group
+        if line == group_or_machine # Check if the IP or DNS matches the group_or_machine parameter
+          is_machine = true # In that case, the parameter is a machine
+        end
+      end
     end
+  end
+  return hosts, is_machine
 end
 
-
-def leer_hosts(grupo_o_maquina)
-    hosts = {}  
-    grupo_actual = nil  # Variable para almacenar el grupo actual mientras leemos el archivo
-    es_maquina = false  # Variable para almacenar si el parámetro grupo_o_maquina es una máquina o un grupo
-    hosts_file = File.expand_path('~/.u/hosts')
-    File.open(hosts_file, 'r').each_line do |linea|  # Abrimos el archivo en modo lectura
-        linea = linea.strip  # Eliminamos los espacios en blanco al inicio y al final de la línea
-        if linea.start_with?('-')  # Si la línea comienza con '-', es un nuevo grupo
-            grupo_actual = linea[1..-1]  # Almacenamos el nombre del grupo sin el guión
-            hosts[grupo_actual] = []  # Inicializamos una lista vacía para almacenar las direcciones del grupo
-        elsif linea.start_with?('+')  # Si la línea comienza con '+', estamos incluyendo un grupo anterior
-            grupo_anterior = linea[1..-1]  # Almacenamos el nombre del grupo anterior
-            if hosts.key?(grupo_anterior)  # Verificamos si el grupo anterior existe en el hash de hosts
-                hosts[grupo_actual].concat(hosts[grupo_anterior])  # Concatenamos las direcciones del grupo anterior con el grupo actual
-            end
-        elsif !linea.empty?  # Sino, si la línea no está vacía, es una dirección IP o nombre DNS
-            if grupo_actual  # Verificamos si hay un grupo actual definido
-                hosts[grupo_actual] << linea  # Agregamos la dirección al grupo actual
-                if linea == grupo_o_maquina  # Verificamos si la direccion IP o el nombre DNS coincide con el parámetro grupo_o_maquina
-                    es_maquina = true # En ese caso, el parámetro con el que se ha invocado al script es una máquina
-                end
-            end
-        end
-    end
-    return hosts, es_maquina
+# Function to display the correct usage of the program
+def display_usage
+  puts "Usage: u [group_or_machine] command [command_parameters]"
+  puts "Available commands: p, s"
+  puts "The 'c' command can be used as follows:"
+  puts "u [group_or_machine] c file_list"
 end
 
+# Function to parse the script's command-line arguments
+def parse_arguments(argv)
+  subcommand = nil
+  group_or_machine = nil
+  ssh_subcommand = nil
+  file_list = []
 
-# Funcion que muestra el uso correcto del programa
-def mostrar_uso_correcto
-    puts "Uso: u [grupo_o_maquina] comando_de_u [parametros_de_comando_de_u]"
-    puts "Comandos disponibles: p, s"
-
-    puts "El comando c puede ser utilizado de la siguiente forma:"
-    puts "u [grupo_o_maquina] c lista_de_ficheros"
-end
-
-# Funcion que lee los parámetros pasados al script
-def leer_parametros(argv)
-    subcomando = nil
-    grupo_o_maquina = nil
-    subcomando_ssh = nil
-    lista_fichs = []
-
-    if argv.length == 1 
-        if argv[0] == "p"
-            subcomando = argv[0]
-        elsif argv[0] == "s"
-            mostrar_uso_correcto 
-            exit
-        end
-    elsif argv.length == 2 
-        if argv[1] == "p"
-            subcomando = argv[1]
-            grupo_o_maquina = argv[0]
-        elsif argv[0] == "s"
-            subcomando = argv[0]
-            subcomando_ssh = argv[1]
-        elsif argv[0] == "c"
-            subcomando = argv[0]
-            lista_fichs = [argv[1]]
-        end        
-    elsif argv.length >= 3
-        if argv[1] == "s"
-            subcomando = argv[1]
-            grupo_o_maquina = argv[0]
-            subcomando_ssh = argv[2]
-        elsif argv[1] == "c"
-            subcomando = argv[1]
-            grupo_o_maquina = argv[0]
-            lista_fichs = argv[2..-1]
-        elsif argv[0] == "c"
-            subcomando = argv[0]
-            lista_fichs = argv[1..-1]
-        end
-    else
-        mostrar_uso_correcto
-        exit
+  if argv.length == 1
+    if argv[0] == "p"
+      subcommand = argv[0]
+    elsif argv[0] == "s"
+      display_usage
+      exit
     end
+  elsif argv.length == 2
+    if argv[1] == "p"
+      subcommand = argv[1]
+      group_or_machine = argv[0]
+    elsif argv[0] == "s"
+      subcommand = argv[0]
+      ssh_subcommand = argv[1]
+    elsif argv[0] == "c"
+      subcommand = argv[0]
+      file_list = [argv[1]]
+    end
+  elsif argv.length >= 3
+    if argv[1] == "s"
+      subcommand = argv[1]
+      group_or_machine = argv[0]
+      ssh_subcommand = argv[2]
+    elsif argv[1] == "c"
+      subcommand = argv[1]
+      group_or_machine = argv[0]
+      file_list = argv[2..-1]
+    elsif argv[0] == "c"
+      subcommand = argv[0]
+      file_list = argv[1..-1]
+    end
+  else
+    display_usage
+    exit
+  end
 
-    return subcomando, grupo_o_maquina, subcomando_ssh, lista_fichs
+  return subcommand, group_or_machine, ssh_subcommand, file_list
 end
 
 ######################################
-#########PROGRAMA PRINCIPAL###########
+######## MAIN PROGRAM ################
 ######################################
-# Leer los parámetros pasados al script 
-subcomando, grupo_o_maquina, subcomando_ssh, lista_fichs = leer_parametros(ARGV)
-# Ejecutar la acción correspondiente al subcomando
-accion(subcomando, grupo_o_maquina, subcomando_ssh, lista_fichs)
+# Parse the script's arguments
+subcommand, group_or_machine, ssh_subcommand, file_list = parse_arguments(ARGV)
+# Execute the action corresponding to the subcommand
+perform_action(subcommand, group_or_machine, ssh_subcommand, file_list)
 exit
-
-
-

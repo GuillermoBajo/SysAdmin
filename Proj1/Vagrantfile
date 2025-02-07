@@ -1,0 +1,64 @@
+#############################################################################################################################
+## This Vagrantfile is used to configure and create multiple virtual machines using Vagrant.                               ##
+#############################################################################################################################
+
+# Define the boxes to be used for creating the VMs. The Ubu box uses the base image ubuntu/bionic64.
+Ubu = 'ubuntu/bionic64' 
+
+# Define the IP address of the master node.
+MASTER = '192.168.1.209'
+
+# List nodes with the characteristics of each virtual machine to be created: hostname, type, IP address, allocated memory, and master node IP.
+NODES = [
+  { hostname: 'm', type: "master", ip: MASTER, mem: 1000, m: MASTER },
+  { hostname: 'w1', type: "worker", ip: '192.168.1.201', mem: 1000, m: MASTER },
+  { hostname: 'w2', type: "worker", ip: '192.168.1.202', mem: 1000, m: MASTER },
+  { hostname: 'w3', type: "worker", ip: '192.168.1.203', mem: 1000, m: MASTER },
+]
+
+# Configure the VMs using the Vagrant.configure block. Iterate over each VM defined in NODES.
+Vagrant.configure("2") do |config| 
+    # Iterate over each node defined in NODES
+    NODES.each do |node|
+        
+        # Specific configuration for each node
+        config.vm.define node[:hostname] do |nodeconfig|
+            # Configure the box and hostname of the VM
+            nodeconfig.vm.box = Ubu
+            nodeconfig.vm.hostname = node[:hostname]
+            
+            # Configure the public network
+            nodeconfig.vm.network :public_network,
+                    bridge: "wlp0s20f3", # Name of the network bridge
+                    ip: node[:ip],       # Node's IP address
+                    nic_type: "virtio"   # Type of network interface
+            
+            # Specific configuration for the VirtualBox provider
+            nodeconfig.vm.provider "virtualbox" do |v|
+                # Assign resources to the VM
+                v.customize ["modifyvm",:id,"--memory",node[:mem],"--cpus","1"] 
+                # Default network interface type
+                v.default_nic_type = "virtio" 
+            end
+                
+            # Set the maximum boot timeout
+            nodeconfig.vm.boot_timeout = 400
+            
+            # Provision the VM using a shell script
+            nodeconfig.vm.provision "shell", 
+                # Path to the provisioning script
+                path: 'provision.sh',
+                # Arguments for the script
+                args: [ node[:hostname], node[:ip], node[:m], node[:type] ]
+            
+            # If the node is of type "master," execute a trigger after the VM is up
+            if node[:type] == "master"
+                nodeconfig.trigger.after :up do |trigger|
+                    # Copy the K3s configuration file to the .kube directory of my personal user
+                    trigger.run = \
+                        {inline: "sh -c 'cp k3s.yaml /home/guillermobajo/.kube/config'"}
+                end
+            end
+        end
+    end
+end

@@ -4,15 +4,18 @@ require 'net/ssh'
 require 'timeout'
 
 class UTool
-    TIMEOUT = 2
+  TIMEOUT = 2
+
   def initialize
     @hosts_file = File.expand_path('~/.u/hosts')
   end
 
+  # Reads the list of hosts from the file
   def read_hosts
     File.readlines(@hosts_file).map(&:chomp)
   end
 
+  # Pings the hosts and checks their availability
   def ping
     hosts = read_hosts
     results = {}
@@ -20,9 +23,10 @@ class UTool
     hosts.each do |host|
       results[host] = ping_host(host)
     end
-   display_results(results)
+    display_results(results)
   end
 
+  # Executes a remote command on the hosts
   def execute_command(command)
     hosts = read_hosts
     results = {}
@@ -36,52 +40,56 @@ class UTool
 
   private
 
+  # Pings a single host to check if it's reachable
   def ping_host(host)
     begin
-      if Net::Ping::TCP.new(host,22,0.4).ping?
-          return "FUNCIONA"
+      if Net::Ping::TCP.new(host, 22, 0.4).ping?
+        return "WORKING"
       else
-          return "falla"
+        return "FAILED"
       end
     end
   end
 
+  # Executes a command on a remote host via SSH
   def execute_remote_command(host, command)
-      begin
-        Timeout.timeout(0.4) do
-          Net::SSH.start(host, "a842748", keys: ["~/.ssh/id_rsa"]) do |ssh|
-          #   ssh.exec!(command)
-          end
+    begin
+      Timeout.timeout(0.4) do
+        Net::SSH.start(host, "a842748", keys: ["~/.ssh/id_rsa"]) do |ssh|
+          # Uncomment the next line if you want to execute the command
+          # ssh.exec!(command)
         end
-        'exito'
-      rescue Timeout::Error
-        'timeout'
-      rescue StandardError => e
-        "error: #{e.message}"
       end
-    end
-
-
-    def display_results(results)
-      results.each do |host, status|
-        puts "#{host}: #{status}"
-      end
+      'SUCCESS'
+    rescue Timeout::Error
+      'TIMEOUT'
+    rescue StandardError => e
+      "ERROR: #{e.message}"
     end
   end
 
-  if $PROGRAM_NAME == __FILE__
-    case ARGV[0]
-    when 'p'
-      UTool.new.ping
-    when 's'
-      command = ARGV[1]
-      unless command.nil?
-        UTool.new.execute_command(command)
-      else
-        puts 'Falta el comando a ejecutar.'
-      end
+  # Displays the results of operations
+  def display_results(results)
+    results.each do |host, status|
+      puts "#{host}: #{status}"
+    end
+  end
+end
+
+# Main program logic
+if $PROGRAM_NAME == __FILE__
+  case ARGV[0]
+  when 'p'
+    UTool.new.ping
+  when 's'
+    command = ARGV[1]
+    unless command.nil?
+      UTool.new.execute_command(command)
     else
-      puts 'Uso: ruby u.rb <subcomando> <opciones comandos>'
-      puts 'Subcomandos disponibles: p, s'
+      puts 'Missing command to execute.'
     end
+  else
+    puts 'Usage: ruby u.rb <subcommand> <command options>'
+    puts 'Available subcommands: p, s'
   end
+end
